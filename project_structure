@@ -1,0 +1,54 @@
+studyai/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── security.py
+│   │   └── dependencies.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── v1/
+│   │   │   ├── __init__.py
+│   │   │   ├── endpoints/
+│   │   │   │   ├── auth.py
+│   │   │   │   ├── materials.py
+│   │   │   │   ├── flashcards.py
+│   │   │   │   ├── questions.py
+│   │   │   │   ├── progress.py
+│   │   │   │   └── admin.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── material.py
+│   │   ├── flashcard.py
+│   │   └── question.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── material.py
+│   │   ├── flashcard.py
+│   │   └── question.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── material_parser.py
+│   │   ├── ai_generator.py
+│   │   ├── email.py
+│   │   └── payment.py
+│   └── utils/
+│       ├── __init__.py
+│       └── helpers.py
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   └── test_api/
+├── alembic/
+│   ├── versions/
+│   └── alembic.ini
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── requirements.txt
+└── .env 
