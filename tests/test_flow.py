@@ -2,6 +2,7 @@ import asyncio
 import httpx
 import pytest
 from typing import Dict
+from app.schemas.ai_content import SingleQuestion
 
 BASE_URL = "http://localhost:8086/api/v1"
 
@@ -60,6 +61,14 @@ async def test_full_flow():
         assert response.status_code == 200
         questions = response.json()
         assert len(questions) == 3
+        # Validate question structure
+        for question in questions:
+            assert "id" in question
+            assert "category" in question
+            assert "question" in question
+            assert "options" in question
+            assert "answer" in question
+            assert "explanation" in question
         
         # 6. Update flashcard progress
         flashcard_scores = {

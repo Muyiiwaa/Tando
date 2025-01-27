@@ -5,7 +5,7 @@ from app.core.dependencies import get_current_active_user, get_async_db
 from app.models.user import User
 from app.models.material import Material  # Import Material model from models
 from app.schemas.material import MaterialCreate, MaterialResponse
-from app.schemas.ai_content import Flashcard, MultipleChoiceQuestion
+from app.schemas.ai_content import Flashcard, SingleQuestion
 from app.services.material_parser import MaterialParser
 from app.services.ai_generator import AIGenerator
 from app.services.pdf_service import PDFService
@@ -162,7 +162,7 @@ async def generate_flashcards(
     )
     return flashcards
 
-@router.post("/{material_id}/generate-questions", response_model=List[MultipleChoiceQuestion])
+@router.post("/{material_id}/generate-questions", response_model=List[SingleQuestion])
 async def generate_questions(
     material_id: int,
     num_questions: int = 5,

@@ -7,12 +7,16 @@ class Flashcard(BaseModel):
     topic: str = Field(..., description="The main topic this flashcard covers")
     difficulty: str = Field(..., enum=["easy", "medium", "hard"])
 
-class MultipleChoiceQuestion(BaseModel):
+class SingleQuestion(BaseModel):
+    id: str = Field(..., description="Unique identifier for the question")
+    category: str = Field(..., description="Category of the question")
     question: str = Field(..., description="The question text")
-    choices: List[str] = Field(..., description="List of possible answers", min_items=4, max_items=4)
-    correct_index: int = Field(..., description="Index of the correct answer (0-3)", ge=0, le=3)
-    explanation: str = Field(..., description="Explanation of why the answer is correct")
-    topic: str = Field(..., description="The main topic this question covers")
+    options: List[str] = Field(..., description="List of 4 answers options for multiple-choice questions")
+    answer: str = Field(..., description="The correct answer (string)")
+    explanation: str = Field(..., description="Explanation for the answer")
+
+class MultipleQuestions(BaseModel):
+    questions: List[SingleQuestion] = Field(..., description="List of questions")
 
 class AIGenerationRequest(BaseModel):
     text: str = Field(..., description="The text to generate content from")
