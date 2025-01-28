@@ -2,10 +2,13 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 class Flashcard(BaseModel):
-    question: str = Field(..., description="The front side of the flashcard with the question")
-    answer: str = Field(..., description="The back side of the flashcard with the answer")
+    id: str = Field(..., description="Unique identifier for the flashcard")
+    category: str = Field(..., description="Category of the flashcard")
+    front: str = Field(..., description="Front side of the flashcard (question)")
+    back: str = Field(..., description="Back side of the flashcard (answer)")
     topic: str = Field(..., description="The main topic this flashcard covers")
     difficulty: str = Field(..., enum=["easy", "medium", "hard"])
+    explanation: str = Field(..., description="Additional context or explanation")
 
 class SingleQuestion(BaseModel):
     id: str = Field(..., description="Unique identifier for the question")
@@ -17,6 +20,9 @@ class SingleQuestion(BaseModel):
 
 class MultipleQuestions(BaseModel):
     questions: List[SingleQuestion] = Field(..., description="List of questions")
+
+class MultipleFlashcards(BaseModel):
+    flashcards: List[Flashcard] = Field(..., description="List of flashcards")
 
 class AIGenerationRequest(BaseModel):
     text: str = Field(..., description="The text to generate content from")

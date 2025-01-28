@@ -127,4 +127,5 @@ class ProgressService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to access this material"
             )
-        return material 
+        return material
+    

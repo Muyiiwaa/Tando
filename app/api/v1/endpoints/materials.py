@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_active_user, get_async_db
 from app.models.user import User
@@ -142,25 +142,48 @@ async def upload_youtube(
             detail=str(e)
         )
 
-@router.post("/{material_id}/generate-flashcards", response_model=List[Flashcard])
+@router.post(
+    "/{material_id}/generate-flashcards", 
+    response_model=List[Flashcard],
+    responses={
+        404: {"description": "Material not found"},
+        400: {"description": "Invalid request"},
+    }
+)
 async def generate_flashcards(
     material_id: int,
-    num_cards: int = 5,
+    num_cards: int = Query(default=5, ge=1, le=20),
     topics: Optional[List[str]] = None,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_active_user),
 ):
+    """
+    Generate flashcards from material content using AI
+    
+    - **material_id**: ID of the learning material
+    - **num_cards**: Number of flashcards to generate (1-20)
+    - **topics**: Optional list of specific topics to focus on
+    """
     material = await db.get(Material, material_id)
     
     if not material:
-        raise HTTPException(status_code=404, detail="Material not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Material not found"
+        )
     
-    flashcards = await ai_generator.generate_flashcards(
-        material.content,
-        num_cards,
-        topics
-    )
-    return flashcards
+    try:
+        flashcards = await ai_generator.generate_flashcards(
+            material.content,
+            num_cards,
+            topics
+        )
+        return flashcards
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error generating flashcards: {str(e)}"
+        )
 
 @router.post("/{material_id}/generate-questions", response_model=List[SingleQuestion])
 async def generate_questions(

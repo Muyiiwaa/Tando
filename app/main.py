@@ -8,9 +8,8 @@ from app.models import Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup
+    # Create tables on startup if they don't exist
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)  # Reset database for clean start
         await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
