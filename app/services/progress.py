@@ -17,11 +17,12 @@ class ProgressService:
         # First verify material exists and user has access
         material = await self._verify_material_access(db, material_id, user_id)
         
-        query = select(Progress).where(
+        # Use select statement instead of direct query
+        stmt = select(Progress).where(
             Progress.user_id == user_id,
             Progress.material_id == material_id
         )
-        result = await db.execute(query)
+        result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
     async def update_progress(
@@ -116,13 +117,16 @@ class ProgressService:
         material_id: int,
         user_id: int
     ) -> Material:
-        material = await db.get(Material, material_id)
+        stmt = select(Material).where(Material.id == material_id)
+        result = await db.execute(stmt)
+        material = result.scalar_one_or_none()
+        
         if not material:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Material not found"
             )
-        if material.user_id != user_id:
+        if material.owner_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to access this material"

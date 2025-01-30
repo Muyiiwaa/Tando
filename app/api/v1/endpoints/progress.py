@@ -5,6 +5,7 @@ from app.core.dependencies import get_current_active_user, get_async_db
 from app.models.user import User
 from app.schemas.progress import Progress, ProgressUpdate
 from app.services.progress import ProgressService
+from datetime import datetime
 
 router = APIRouter()
 progress_service = ProgressService()
@@ -41,10 +42,20 @@ async def get_progress(
         material_id
     )
     if not progress:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No progress found for this material"
+        # Instead of 404, we should create a new progress record
+        progress = Progress(
+            user_id=current_user.id,
+            material_id=material_id,
+            flashcard_scores={},
+            question_scores={},
+            overall_mastery=0.0,
+            last_reviewed=datetime.utcnow(),
+            next_review=datetime.utcnow()
         )
+        db.add(progress)
+        await db.commit()
+        await db.refresh(progress)
+    
     return progress
 
 @router.post(
