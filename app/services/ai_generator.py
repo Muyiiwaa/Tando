@@ -65,4 +65,4 @@ class AIGenerator:
         for question in questions:
             question.id = f"q_{uuid4()}"
         
-        return questions 
+        return questions

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 
 class MaterialBase(BaseModel):
@@ -21,4 +21,20 @@ class MaterialResponse(MaterialBase):
 
 # This is used for internal operations
 class MaterialInDB(MaterialResponse):
-    pass 
+    pass
+
+class MaterialStats(BaseModel):
+    num_flashcards: int
+    num_questions: int
+
+class MaterialListItem(MaterialResponse):
+    stats: MaterialStats
+
+    class Config:
+        from_attributes = True
+
+class MaterialList(BaseModel):
+    materials: List[MaterialListItem]
+    total: int
+    page: int
+    per_page: int 

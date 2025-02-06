@@ -1,13 +1,13 @@
 from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.core.dependencies import get_current_active_user, get_async_db
 from app.models.user import User
 from app.models.material import Material
 from app.models.question import Question
 from app.models.flashcard import Flashcard
-from app.schemas.material import MaterialCreate, MaterialResponse
+from app.schemas.material import MaterialCreate, MaterialResponse, MaterialStats, MaterialListItem, MaterialList
 from app.schemas.ai_content import Flashcard as FlashcardSchema
 from app.schemas.answers import (
     QuestionResponse, MaterialQuestionsResponse,
@@ -454,4 +454,87 @@ async def evaluate_questions(
         correct_answers=correct_count,
         score=correct_count / len(questions),
         results=results
+    )
+
+@router.get(
+    "/",
+    response_model=MaterialList,
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+async def get_user_materials(
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    source_type: Optional[str] = Query(None, regex="^(pdf|youtube)$"),
+    sort_by: str = Query("created_at", regex="^(created_at)$"),
+    order: str = Query("desc", regex="^(asc|desc)$"),
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all materials for the current user with optional filtering and sorting.
+    
+    - **page**: Page number (default: 1)
+    - **per_page**: Items per page (default: 20, max: 100)
+    - **source_type**: Filter by 'pdf' or 'youtube'
+    - **sort_by**: Sort field (currently only 'created_at')
+    - **order**: Sort order ('asc' or 'desc')
+    """
+    # Build query
+    query = select(Material).where(Material.owner_id == current_user.id)
+    
+    # Apply filters
+    if source_type:
+        query = query.where(Material.source_type == source_type)
+    
+    # Apply sorting
+    if order == "desc":
+        query = query.order_by(Material.created_at.desc())
+    else:
+        query = query.order_by(Material.created_at.asc())
+    
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query)
+    
+    # Apply pagination
+    query = query.offset((page - 1) * per_page).limit(per_page)
+    
+    # Execute query
+    result = await db.execute(query)
+    materials = result.scalars().all()
+    
+    # Get stats for each material
+    material_list = []
+    for material in materials:
+        # Count flashcards and questions
+        flashcards_count = await db.scalar(
+            select(func.count()).select_from(Flashcard).where(
+                Flashcard.material_id == material.id,
+                Flashcard.user_id == current_user.id
+            )
+        )
+        questions_count = await db.scalar(
+            select(func.count()).select_from(Question).where(
+                Question.material_id == material.id,
+                Question.user_id == current_user.id
+            )
+        )
+        
+        material_list.append(
+            MaterialListItem(
+                **material.__dict__,
+                stats=MaterialStats(
+                    num_flashcards=flashcards_count,
+                    num_questions=questions_count
+                )
+            )
+        )
+    
+    return MaterialList(
+        materials=material_list,
+        total=total,
+        page=page,
+        per_page=per_page
     ) 
