@@ -267,11 +267,10 @@ async def get_flashcards(
 @router.post("/{material_id}/generate-questions")
 async def generate_questions(
     material_id: int,
-    num_questions: int = 5,
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Generate or retrieve questions for a material"""
+    """Generate exactly 20 questions for a material"""
     # Check material exists and belongs to user
     material = await db.get(Material, material_id)
     if not material or material.owner_id != current_user.id:
@@ -288,10 +287,10 @@ async def generate_questions(
     if existing_questions:
         return existing_questions
 
-    # Generate new questions
+    # Generate exactly 20 questions
     questions = await ai_generator.generate_questions(
         material.content,
-        num_questions
+        num_questions=20  # Fixed at 20
     )
 
     # Save questions to database
@@ -316,18 +315,21 @@ async def generate_questions(
     response_model=MaterialQuestionsResponse,
     responses={
         404: {"description": "Material or questions not found"},
-        403: {"description": "Not authorized to access these questions"}
+        403: {"description": "Not authorized to access these questions"},
+        400: {"description": "Invalid number of questions requested"}
     }
 )
 async def get_material_questions(
     material_id: int,
+    num_questions: int = Query(default=5, ge=1, le=20),
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Retrieve all questions for a specific material
+    Retrieve exact number of random questions for a specific material
     
     - **material_id**: ID of the material
+    - **num_questions**: Exact number of questions to return (min: 1, max: 20)
     """
     # Verify material exists and user has access
     material = await db.get(Material, material_id)
@@ -343,13 +345,23 @@ async def get_material_questions(
         Question.user_id == current_user.id
     )
     result = await db.execute(stmt)
-    questions = result.scalars().all()
+    all_questions = result.scalars().all()
 
-    if not questions:
+    if not all_questions:
         raise HTTPException(
             status_code=404,
-            detail="No questions found for this material"
+            detail="No questions found for this material. Generate questions first."
         )
+
+    # Verify requested number doesn't exceed available questions
+    if num_questions > len(all_questions):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Requested {num_questions} questions but only {len(all_questions)} are available"
+        )
+
+    # Select exactly the requested number of random questions
+    selected_questions = sample(all_questions, num_questions)
 
     # Format response
     question_list = [
@@ -361,12 +373,12 @@ async def get_material_questions(
                 for i, option in enumerate(q.options)
             },
             category=q.category
-        ) for q in questions
+        ) for q in selected_questions
     ]
 
     return MaterialQuestionsResponse(
         questions=question_list,
-        total_questions=len(question_list)
+        total_questions=len(question_list)  # This will be equal to num_questions
     )
 
 @router.post(
