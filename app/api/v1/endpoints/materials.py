@@ -19,11 +19,13 @@ from app.services.ai_generator import AIGenerator
 from app.services.pdf_service import PDFService
 from app.services.youtube_service import YouTubeService
 from random import sample
+from app.services.question_session import QuestionSessionService
 
 router = APIRouter()
 ai_generator = AIGenerator()
 pdf_service = PDFService()
 youtube_service = YouTubeService()
+question_session_service = QuestionSessionService()
 
 @router.post(
     "/upload/pdf",
@@ -312,12 +314,7 @@ async def generate_questions(
 
 @router.get(
     "/{material_id}/questions",
-    response_model=MaterialQuestionsResponse,
-    responses={
-        404: {"description": "Material or questions not found"},
-        403: {"description": "Not authorized to access these questions"},
-        400: {"description": "Invalid number of questions requested"}
-    }
+    response_model=MaterialQuestionsResponse
 )
 async def get_material_questions(
     material_id: int,
@@ -325,12 +322,7 @@ async def get_material_questions(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """
-    Retrieve exact number of random questions for a specific material
-    
-    - **material_id**: ID of the material
-    - **num_questions**: Exact number of questions to return (min: 1, max: 20)
-    """
+    """Retrieve exact number of random questions for a specific material"""
     # Verify material exists and user has access
     material = await db.get(Material, material_id)
     if not material or material.owner_id != current_user.id:
@@ -339,7 +331,7 @@ async def get_material_questions(
             detail="Material not found"
         )
 
-    # Get all questions for this material
+    # Get all questions
     stmt = select(Question).where(
         Question.material_id == material_id,
         Question.user_id == current_user.id
@@ -353,15 +345,22 @@ async def get_material_questions(
             detail="No questions found for this material. Generate questions first."
         )
 
-    # Verify requested number doesn't exceed available questions
     if num_questions > len(all_questions):
         raise HTTPException(
             status_code=400,
             detail=f"Requested {num_questions} questions but only {len(all_questions)} are available"
         )
 
-    # Select exactly the requested number of random questions
+    # Select random questions and remember their order
     selected_questions = sample(all_questions, num_questions)
+    question_order = [all_questions.index(q) for q in selected_questions]
+
+    # Create session to remember question order
+    session_id = await question_session_service.create_session(
+        material_id=material_id,
+        user_id=current_user.id,
+        question_order=question_order
+    )
 
     # Format response
     question_list = [
@@ -369,7 +368,7 @@ async def get_material_questions(
             id=q.id,
             question_text=q.question_text,
             options={
-                chr(65 + i): option  # Convert 0,1,2,3 to A,B,C,D
+                chr(65 + i): option
                 for i, option in enumerate(q.options)
             },
             category=q.category
@@ -377,17 +376,14 @@ async def get_material_questions(
     ]
 
     return MaterialQuestionsResponse(
+        session_id=session_id,
         questions=question_list,
-        total_questions=len(question_list)  # This will be equal to num_questions
+        total_questions=len(question_list)
     )
 
 @router.post(
     "/{material_id}/evaluate-questions",
-    response_model=EvaluationResponse,
-    responses={
-        404: {"description": "Material or questions not found"},
-        400: {"description": "Invalid submission"}
-    }
+    response_model=EvaluationResponse
 )
 async def evaluate_questions(
     material_id: int,
@@ -395,78 +391,79 @@ async def evaluate_questions(
     db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """
-    Evaluate answers for questions from a specific material
-    
-    - **material_id**: ID of the material
-    - **submission**: List of answers with question numbers and selected options
-    """
-    # Verify material exists and user has access
-    material = await db.get(Material, material_id)
-    if not material or material.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=404,
-            detail="Material not found"
-        )
-
-    # Get questions for this material
-    stmt = select(Question).where(
-        Question.material_id == material_id,
-        Question.user_id == current_user.id
-    )
-    result = await db.execute(stmt)
-    questions = result.scalars().all()
-
-    if not questions:
-        raise HTTPException(
-            status_code=404,
-            detail="No questions found for this material"
-        )
-
-    # Evaluate each answer
-    results = []
-    correct_count = 0
-    
-    for answer in submission.answers:
-        # Get corresponding question (array index = question_number - 1)
-        if answer.question_number < 1 or answer.question_number > len(questions):
+    """Evaluate answers using the session to map to correct questions"""
+    try:
+        # Get session data
+        session_data = await question_session_service.get_session(submission.session_id)
+        
+        # Verify session belongs to correct material and user
+        if (session_data["material_id"] != material_id or 
+            session_data["user_id"] != current_user.id):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid question number: {answer.question_number}"
+                detail="Invalid session for this material/user"
             )
-            
-        question = questions[answer.question_number - 1]
-        
-        # Convert selected option (A, B, C, D) to index (0, 1, 2, 3)
-        option_index = ord(answer.selected_option.upper()) - ord('A')
-        if option_index < 0 or option_index >= len(question.options):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid option '{answer.selected_option}' for question {answer.question_number}"
-            )
-            
-        selected_answer = question.options[option_index]
-        is_correct = selected_answer == question.answer
-        
-        if is_correct:
-            correct_count += 1
-            
-        # Find the correct option letter
-        correct_option = chr(ord('A') + question.options.index(question.answer))
-            
-        results.append(QuestionResult(
-            question_number=answer.question_number,
-            correct=is_correct,
-            selected_option=answer.selected_option,
-            correct_option=correct_option if not is_correct else answer.selected_option
-        ))
 
-    return EvaluationResponse(
-        total_questions=len(questions),
-        correct_answers=correct_count,
-        score=correct_count / len(questions),
-        results=results
-    )
+        # Get all questions for this material
+        stmt = select(Question).where(
+            Question.material_id == material_id,
+            Question.user_id == current_user.id
+        )
+        result = await db.execute(stmt)
+        all_questions = result.scalars().all()
+
+        # Evaluate each answer using session's question order
+        results = []
+        correct_count = 0
+        question_order = session_data["question_order"]
+
+        for answer in submission.answers:
+            if answer.question_number < 1 or answer.question_number > len(question_order):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid question number: {answer.question_number}"
+                )
+
+            # Get the actual question using stored order
+            actual_index = question_order[answer.question_number - 1]
+            question = all_questions[actual_index]
+
+            # Convert selected option to answer
+            option_index = ord(answer.selected_option.upper()) - ord('A')
+            if option_index < 0 or option_index >= len(question.options):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid option '{answer.selected_option}' for question {answer.question_number}"
+                )
+
+            selected_answer = question.options[option_index]
+            is_correct = selected_answer == question.answer
+
+            if is_correct:
+                correct_count += 1
+
+            # Find correct option letter
+            correct_option = chr(ord('A') + question.options.index(question.answer))
+
+            results.append(QuestionResult(
+                question_number=answer.question_number,
+                correct=is_correct,
+                selected_option=answer.selected_option,
+                correct_option=correct_option if not is_correct else answer.selected_option
+            ))
+
+        return EvaluationResponse(
+            total_questions=len(submission.answers),
+            correct_answers=correct_count,
+            score=correct_count / len(submission.answers),
+            results=results
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
 
 @router.get(
     "/",

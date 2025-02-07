@@ -8,6 +8,7 @@ class QuestionResponse(BaseModel):
     category: str
 
 class MaterialQuestionsResponse(BaseModel):
+    session_id: str
     questions: List[QuestionResponse]
     total_questions: int
 
@@ -25,6 +26,7 @@ class QuestionAnswer(BaseModel):
     selected_option: str  # A, B, C, or D
 
 class QuestionAnswerSubmission(BaseModel):
+    session_id: str
     answers: List[QuestionAnswer]
 
 class QuestionResult(BaseModel):

@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     FACEBOOK_CLIENT_ID: Optional[str] = None
     FACEBOOK_CLIENT_SECRET: Optional[str] = None
 
+    REDIS_URL: str = "redis://localhost:6379"
+    QUESTION_SESSION_TTL: int = 3600  # 1 hour in seconds
+
     class Config:
         env_file = ".env"
 
