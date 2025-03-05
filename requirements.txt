@@ -19,3 +19,4 @@ httpx>=0.18.2
 google-generativeai>=0.3.0 
 pydantic[email]
 openai
+redis
